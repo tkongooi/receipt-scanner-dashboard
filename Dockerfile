@@ -8,13 +8,13 @@ WORKDIR /app
 # Copy package.json and package-lock.json (or yarn.lock) to leverage Docker cache
 # This step is done separately so npm install is only re-run if dependencies change
 COPY package.json ./
-COPY yarn.lock ./ # If you use yarn, otherwise remove this line
-# COPY package-lock.json ./ # If you use npm, otherwise remove this line
+# COPY yarn.lock ./ # If you use yarn, otherwise remove this line
+COPY package-lock.json ./ # If you use npm, otherwise remove this line
 
 # Install project dependencies
 # Use 'npm install' if you use npm, or 'yarn install' if you use yarn
-RUN yarn install --frozen-lockfile
-# RUN npm install
+# RUN yarn install --frozen-lockfile
+RUN npm install
 
 # Copy the rest of the application source code
 COPY . .
