@@ -207,7 +207,7 @@ function App() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ // Send a simplified payload to your Cloud Function proxy
-                    prompt: prompt_text,
+                    prompt: prompt,
                     imageData: geminiBase64Data,
                     mimeType: 'image/jpeg' // The mimeType that the Cloud Function will use for Gemini
                 })
