@@ -5,6 +5,10 @@ FROM node:18-alpine AS builder
 # Set the working directory inside the container
 WORKDIR /app
 
+# --- ADD THIS DEBUGGING LINE ---
+RUN ls -F  # This will list files in the /app directory (which is your build context root)
+# --- END DEBUGGING LINE ---
+
 # Copy package.json and package-lock.json (or yarn.lock) to leverage Docker cache
 # This step is done separately so npm install is only re-run if dependencies change
 COPY package.json ./
