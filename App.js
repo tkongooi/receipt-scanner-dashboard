@@ -201,13 +201,16 @@ function App() {
                 }
             };
 
-            const apiKey = "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            const apiUrl = `https://us-central1-turing-booster-461522-a5.cloudfunctions.net/gemini-api-proxy`;
 
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ // Send a simplified payload to your Cloud Function proxy
+    			prompt: prompt_text, // The prompt to send to Gemini
+    			imageData: geminiBase64Data, // The base64 image data (already JPEG for Gemini)
+    			mimeType: 'image/jpeg'      // The effective mimeType for the image data
+		})
             });
 
             const result = await response.json();
@@ -217,7 +220,7 @@ function App() {
                 result.candidates[0].content.parts.length > 0) {
 
                 const jsonString = result.candidates[0].content.parts[0].text;
-                const parsedData = JSON.parse(jsonString);
+                const parsedData = result;
 
                 setReceipts(prevReceipts => {
                     const newReceipts = [
