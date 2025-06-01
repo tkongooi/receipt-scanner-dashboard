@@ -1,223 +1,224 @@
-import React, { useState, useEffect, useMemo } from 'react';
+    import React, { useState, useEffect, useMemo } from 'react';
 
-function App() {
-    const [receipts, setReceipts] = useState([]);
-    const [loading, setLoading] = useState(false); // For file processing
-    const [scriptsLoaded, setScriptsLoaded] = useState(false); // For external JS libraries
-    const [error, setError] = useState(null);
-    // State to track which file's preview is currently shown
-    const [currentPreviewIndex, setCurrentPreviewIndex] = useState(-1);
-    // State to track which cell is being edited: { rowIndex: number, fieldName: string }
-    const [editingCell, setEditingCell] = useState(null);
-    const [editedValue, setEditedValue] = useState('');
+    function App() {
+        const [receipts, setReceipts] = useState([]);
+        const [loading, setLoading] = useState(false); // For file processing
+        const [scriptsLoaded, setScriptsLoaded] = useState(false); // For external JS libraries
+        const [error, setError] = useState(null);
+        // State to track which file's preview is currently shown
+        const [currentPreviewIndex, setCurrentPreviewIndex] = useState(-1);
+        // State to track which cell is being edited: { rowIndex: number, fieldName: string }
+        const [editingCell, setEditingCell] = useState(null);
+        const [editedValue, setEditedValue] = useState('');
 
-    // Dynamically load pdf.js, jszip, and file-saver libraries
-    useEffect(() => {
-        let pdfJsScript, jszipScript, fileSaverScript;
-        const scriptsToLoad = [
-            { src: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js', id: 'pdfjs-script' },
-            { src: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js', id: 'jszip-script' },
-            { src: 'https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js', id: 'filesaver-script' }
-        ];
-        let loadedCount = 0;
+        // Dynamically load pdf.js, jszip, and file-saver libraries
+        useEffect(() => {
+            let pdfJsScript, jszipScript, fileSaverScript;
+            const scriptsToLoad = [
+                { src: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js', id: 'pdfjs-script' },
+                { src: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js', id: 'jszip-script' },
+                { src: 'https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js', id: 'filesaver-script' }
+            ];
+            let loadedCount = 0;
 
-        const scriptLoaded = () => {
-            loadedCount++;
-            if (loadedCount === scriptsToLoad.length) {
-                // Ensure pdf.js worker is set after pdf.js is loaded
-                if (window.pdfjsLib) {
-                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-                }
-                setScriptsLoaded(true);
-            }
-        };
-
-        scriptsToLoad.forEach(scriptInfo => {
-            const script = document.createElement('script');
-            script.src = scriptInfo.src;
-            script.id = scriptInfo.id;
-            script.onload = scriptLoaded;
-            script.onerror = () => {
-                console.error(`Failed to load script: ${scriptInfo.src}`);
-                setError(`Failed to load a required library: ${scriptInfo.src}. Please check your internet connection.`);
-                // Still mark as loaded to potentially allow partial functionality or prevent infinite loading
-                scriptLoaded();
-            };
-            document.body.appendChild(script);
-
-            // Store references for cleanup
-            if (scriptInfo.id === 'pdfjs-script') pdfJsScript = script;
-            if (scriptInfo.id === 'jszip-script') jszipScript = script;
-            if (scriptInfo.id === 'filesaver-script') fileSaverScript = script;
-        });
-
-
-        return () => {
-            // Clean up scripts when component unmounts
-            if (pdfJsScript && document.body.contains(pdfJsScript)) document.body.removeChild(pdfJsScript);
-            if (jszipScript && document.body.contains(jszipScript)) document.body.removeChild(jszipScript);
-            if (fileSaverScript && document.body.contains(fileSaverScript)) document.body.removeChild(fileSaverScript);
-        };
-    }, []);
-
-    // Memoized current image preview based on currentPreviewIndex
-    const currentImagePreview = useMemo(() => {
-        if (currentPreviewIndex >= 0 && currentPreviewIndex < receipts.length) {
-            const receipt = receipts[currentPreviewIndex];
-            // For preview, we always use the image data generated for Gemini, as original PDFs can't be directly displayed as <img>
-            if (receipt && receipt.geminiImageData) {
-                return `data:image/jpeg;base64,${receipt.geminiImageData}`;
-            }
-        }
-        return null;
-    }, [receipts, currentPreviewIndex]);
-
-
-    // Function to handle multiple file uploads and processing
-    const handleImageUpload = async (event) => {
-        const files = Array.from(event.target.files); // Get all selected files
-        if (files.length === 0) return;
-
-        setError(null);
-        setLoading(true); // Start loading for all files
-
-        // Process files sequentially
-        for (const file of files) {
-            await processFile(file);
-        }
-
-        setLoading(false); // End loading after all files are processed
-        // Clear the input field after processing to allow re-uploading the same files
-        event.target.value = null;
-    };
-
-    // Helper function to process a single file (image or PDF)
-    const processFile = async (file) => {
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-
-            reader.onloadend = async () => {
-                let geminiBase64Data = null; // Data to send to Gemini (always JPEG)
-                let originalFileBase64 = null; // Original file data for download
-                let originalFileMimeType = file.type;
-
-                if (file.type.startsWith('image/')) {
-                    geminiBase64Data = reader.result.split(',')[1];
-                    originalFileBase64 = reader.result.split(',')[1]; // Store original image base64
-                } else if (file.type === 'application/pdf') {
-                    // Store the original PDF data (as base64) for download
-                    // Convert ArrayBuffer to Base64 string for storage
-                    originalFileBase64 = btoa(new Uint8Array(reader.result).reduce((data, byte) => data + String.fromCharCode(byte), ''));
-
-                    // For Gemini, convert PDF to JPEG preview
-                    if (!window.pdfjsLib) {
-                        setError('PDF.js library not loaded. Cannot process PDF.');
-                        resolve();
-                        return;
+            const scriptLoaded = () => {
+                loadedCount++;
+                if (loadedCount === scriptsToLoad.length) {
+                    // Ensure pdf.js worker is set after pdf.js is loaded
+                    if (window.pdfjsLib) {
+                        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
                     }
-                    const pdfData = new Uint8Array(reader.result);
-                    try {
-                        const pdf = await window.pdfjsLib.getDocument({ data: pdfData }).promise;
-                        const page = await pdf.getPage(1);
-
-                        const viewport = page.getViewport({ scale: 2 });
-                        const canvas = document.createElement('canvas');
-                        const canvasContext = canvas.getContext('2d');
-                        canvas.height = viewport.height;
-                        canvas.width = viewport.width;
-
-                        await page.render({ canvasContext, viewport }).promise;
-
-                        geminiBase64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; // Send JPEG to Gemini
-
-                    } catch (pdfError) {
-                        console.error("Error rendering PDF for Gemini:", pdfError);
-                        setError(`Failed to render PDF: ${file.name} for AI processing. Ensure it is a valid PDF.`);
-                        resolve();
-                        return;
-                    }
-                } else {
-                    setError(`Unsupported file type: ${file.name}. Please upload an image (JPEG, PNG) or a PDF.`);
-                    resolve();
-                    return;
-                }
-
-                if (geminiBase64Data) {
-                    // Pass all necessary data to processReceipt
-                    await processReceipt(geminiBase64Data, originalFileBase64, originalFileMimeType, file.name);
-                }
-                resolve();
-            };
-
-            reader.onerror = () => {
-                setError(`Failed to read file: ${file.name}.`);
-                resolve();
-            };
-
-            // Read file based on its type
-            if (file.type === 'application/pdf') {
-                reader.readAsArrayBuffer(file); // Read PDF as ArrayBuffer
-            } else {
-                reader.readAsDataURL(file); // Read image as Data URL
-            }
-        });
-    };
-
-    // Function to process the receipt using Gemini API
-    // Now accepts geminiBase64Data, originalFileBase64, originalFileMimeType
-    const processReceipt = async (geminiBase64Data, originalFileBase64, originalFileMimeType, originalFileName) => {
-        try {
-            // Updated prompt to include company name
-            const prompt = "Extract the following information from this receipt image: date (YYYY-MM-DD), company name, category (classify as 'Restaurant', 'Transport', 'Groceries', 'Utilities', 'Shopping', 'Other'), meal type (classify as 'Lunch' or 'Dinner' based on typical meal times, if unclear, use 'Unknown'), and total cost. Provide the total cost as a number. If any information is missing, use 'N/A'.";
-
-            const payload = {
-                contents: [
-                    {
-                        role: "user",
-                        parts: [
-                            { text: prompt },
-                            {
-                                inlineData: {
-                                    mimeType: 'image/jpeg', // Always send JPEG to Gemini
-                                    data: geminiBase64Data
-                                }
-                            }
-                        ]
-                    }
-                ],
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "OBJECT",
-                        properties: {
-                            "date": { "type": "STRING", "description": "Date of the receipt inYYYY-MM-DD format. If not found, use 'N/A'." },
-                            "companyName": { "type": "STRING", "description": "Name of the company or establishment. If not found, use 'N/A'." }, // Added companyName
-                            "category": { "type": "STRING", "description": "Category of the expense, such as 'Restaurant', 'Transport', 'Groceries', 'Utilities', 'Shopping', 'Other'. If not found, use 'Other'." },
-                            "mealType": { "type": "STRING", "description": "Type of meal, either 'Lunch', 'Dinner', or 'Unknown'. If not found, use 'Unknown'." },
-                            "cost": { "type": "NUMBER", "description": "Total cost of the receipt as a number. If not found, use 0." }
-                        },
-                        "required": ["date", "companyName", "category", "mealType", "cost"] // Added companyName to required
-                    }
+                    setScriptsLoaded(true);
                 }
             };
 
-            const apiKey = "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            scriptsToLoad.forEach(scriptInfo => {
+                const script = document.createElement('script');
+                script.src = scriptInfo.src;
+                script.id = scriptInfo.id;
+                script.onload = scriptLoaded;
+                script.onerror = () => {
+                    console.error(`Failed to load script: ${scriptInfo.src}`);
+                    setError(`Failed to load a required library: ${scriptInfo.src}. Please check your internet connection.`);
+                    // Still mark as loaded to potentially allow partial functionality or prevent infinite loading
+                    scriptLoaded();
+                };
+                document.body.appendChild(script);
 
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                // Store references for cleanup
+                if (scriptInfo.id === 'pdfjs-script') pdfJsScript = script;
+                if (scriptInfo.id === 'jszip-script') jszipScript = script;
+                if (scriptInfo.id === 'filesaver-script') fileSaverScript = script;
             });
 
-            const result = await response.json();
 
-            if (result.candidates && result.candidates.length > 0 &&
-                result.candidates[0].content && result.candidates[0].content.parts &&
-                result.candidates[0].content.parts.length > 0) {
+            return () => {
+                // Clean up scripts when component unmounts
+                if (pdfJsScript && document.body.contains(pdfJsScript)) document.body.removeChild(pdfJsScript);
+                if (jszipScript && document.body.contains(jszipScript)) document.body.removeChild(jszipScript);
+                if (fileSaverScript && document.body.contains(fileSaverScript)) document.body.removeChild(fileSaverScript);
+            };
+        }, []);
 
-                const jsonString = result.candidates[0].content.parts[0].text;
-                const parsedData = JSON.parse(jsonString);
+        // Memoized current image preview based on currentPreviewIndex
+        const currentImagePreview = useMemo(() => {
+            if (currentPreviewIndex >= 0 && currentPreviewIndex < receipts.length) {
+                const receipt = receipts[currentPreviewIndex];
+                // For preview, we always use the image data generated for Gemini, as original PDFs can't be directly displayed as <img>
+                if (receipt && receipt.geminiImageData) {
+                    return `data:image/jpeg;base64,${receipt.geminiImageData}`;
+                }
+            }
+            return null;
+        }, [receipts, currentPreviewIndex]);
+
+
+        // Function to handle multiple file uploads and processing
+        const handleImageUpload = async (event) => {
+            const files = Array.from(event.target.files); // Get all selected files
+            if (files.length === 0) return;
+
+            setError(null);
+            setLoading(true); // Start loading for all files
+
+            // Process files sequentially
+            for (const file of files) {
+                await processFile(file);
+            }
+
+            setLoading(false); // End loading after all files are processed
+            // Clear the input field after processing to allow re-uploading the same files
+            event.target.value = null;
+        };
+
+        // Helper function to process a single file (image or PDF)
+        const processFile = async (file) => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+
+                reader.onloadend = async () => {
+                    let geminiBase64Data = null; // Data to send to Gemini (always JPEG)
+                    let originalFileBase64 = null; // Original file data for download
+                    let originalFileMimeType = file.type;
+
+                    if (file.type.startsWith('image/')) {
+                        geminiBase64Data = reader.result.split(',')[1];
+                        originalFileBase64 = reader.result.split(',')[1]; // Store original image base64
+                    } else if (file.type === 'application/pdf') {
+                        // Store the original PDF data (as base64) for download
+                        // Convert ArrayBuffer to Base64 string for storage
+                        originalFileBase64 = btoa(new Uint8Array(reader.result).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+
+                        // For Gemini, convert PDF to JPEG preview
+                        if (!window.pdfjsLib) {
+                            setError('PDF.js library not loaded. Cannot process PDF.');
+                            resolve();
+                            return;
+                        }
+                        const pdfData = new Uint8Array(reader.result);
+                        try {
+                            const pdf = await window.pdfjsLib.getDocument({ data: pdfData }).promise;
+                            const page = await pdf.getPage(1);
+
+                            const viewport = page.getViewport({ scale: 2 });
+                            const canvas = document.createElement('canvas');
+                            const canvasContext = canvas.getContext('2d');
+                            canvas.height = viewport.height;
+                            canvas.width = viewport.width;
+
+                            await page.render({ canvasContext, viewport }).promise;
+
+                            geminiBase64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; // Send JPEG to Gemini
+
+                        } catch (pdfError) {
+                            console.error("Error rendering PDF for Gemini:", pdfError);
+                            setError(`Failed to render PDF: ${file.name} for AI processing. Ensure it is a valid PDF.`);
+                            resolve();
+                            return;
+                        }
+                    } else {
+                        setError(`Unsupported file type: ${file.name}. Please upload an image (JPEG, PNG) or a PDF.`);
+                        resolve();
+                        return;
+                    }
+
+                    if (geminiBase64Data) {
+                        // Pass all necessary data to processReceipt
+                        await processReceipt(geminiBase64Data, originalFileBase64, originalFileMimeType, file.name);
+                    }
+                    resolve();
+                };
+
+                reader.onerror = () => {
+                    setError(`Failed to read file: ${file.name}.`);
+                    resolve();
+                };
+
+                // Read file based on its type
+                if (file.type === 'application/pdf') {
+                    reader.readAsArrayBuffer(file); // Read PDF as ArrayBuffer
+                } else {
+                    reader.readAsDataURL(file); // Read image as Data URL
+                }
+            });
+        };
+
+        // Function to process the receipt using Gemini API
+        // Now accepts geminiBase64Data, originalFileBase64, originalFileMimeType
+        const processReceipt = async (geminiBase64Data, originalFileBase64, originalFileMimeType, originalFileName) => {
+            try {
+                // Updated prompt to include company name
+                const prompt = "Extract the following information from this receipt image: date (YYYY-MM-DD), company name, category (classify as 'Restaurant', 'Transport', 'Groceries', 'Utilities', 'Shopping', 'Other'), meal type (classify as 'Lunch' or 'Dinner' based on typical meal times, if unclear, use 'Unknown'), and total cost. Provide the total cost as a number. If any information is missing, use 'N/A'.";
+
+                const payload = {
+                    contents: [
+                        {
+                            role: "user",
+                            parts: [
+                                { text: prompt },
+                                {
+                                    inlineData: {
+                                        mimeType: 'image/jpeg', // Always send JPEG to Gemini
+                                        data: geminiBase64Data
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                "date": { "type": "STRING", "description": "Date of the receipt inYYYY-MM-DD format. If not found, use 'N/A'." },
+                                "companyName": { "type": "STRING", "description": "Name of the company or establishment. If not found, use 'N/A'." }, // Added companyName
+                                "category": { "type": "STRING", "description": "Category of the expense, such as 'Restaurant', 'Transport', 'Groceries', 'Utilities', 'Shopping', 'Other'. If not found, use 'Other'." } , // <--- ADDED COMMA HERE
+                                "mealType": { "type": "STRING", "description": "Type of meal, either 'Lunch', 'Dinner', or 'Unknown'. If not found, use 'Unknown'." },
+                                "cost": { "type": "NUMBER", "description": "Total cost of the receipt as a number. If not found, use 0." }
+                            },
+                            "required": ["date", "companyName", "category", "mealType", "cost"] // Added companyName to required
+                        }
+                    }
+                };
+
+                // IMPORTANT: This 'apiKey' variable is now removed from client-side code
+                // and the 'apiUrl' points to your Cloud Function proxy.
+                // The Cloud Function will handle the Gemini API key securely.
+                const apiUrl = `https://us-central1-turing-booster-461522-a5.cloudfunctions.net/gemini-api-proxy`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ // Send a simplified payload to your Cloud Function proxy
+                        prompt: prompt_text,
+                        imageData: geminiBase64Data,
+                        mimeType: 'image/jpeg' // The mimeType that the Cloud Function will use for Gemini
+                    })
+                });
+
+                const result = await response.json();
+                // Assuming your Cloud Function returns the already parsed JSON object directly from Gemini
+                const parsedData = result;
 
                 setReceipts(prevReceipts => {
                     const newReceipts = [
@@ -598,4 +599,3 @@ function App() {
 }
 
 export default App;
-
