@@ -13,7 +13,7 @@ RUN ls -F  # This will list files in the /app directory (which is your build con
 # This step is done separately so npm install is only re-run if dependencies change
 COPY package.json ./
 # COPY yarn.lock ./ # If you use yarn, otherwise remove this line
-COPY package-lock.json ./ # If you use npm, otherwise remove this line
+# COPY package-lock.json ./ # If you use npm, otherwise remove this line
 
 # Install project dependencies
 # Use 'npm install' if you use npm, or 'yarn install' if you use yarn
