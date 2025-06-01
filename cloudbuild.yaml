@@ -1,0 +1,20 @@
+# cloudbuild.yaml
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'gcr.io/$PROJECT_ID/receipt-scanner-dashboard:latest', '.']
+  # This step builds your Docker image from the Dockerfile in the current directory ('.')
+images:
+- 'gcr.io/turing-booster-461522-a5/receipt-scanner-dashboard:latest'
+# This specifies the Docker image that Cloud Build will push to Container Registry
+
+# --- Crucial Part: Logging Configuration ---
+options:
+  # This explicitly tells Cloud Build to send logs only to Cloud Logging.
+  # This addresses option (c) from your error message: CLOUD_LOGGING_ONLY.
+  logging: CLOUD_LOGGING_ONLY
+
+# If the error message 'build.service_account' is specified persists,
+# you might need to explicitly set the service account here as well.
+# UNCOMMENT THE LINES BELOW IF THE ERROR ABOUT SERVICE ACCOUNT PERSISTS
+# serviceAccount: 'projects/[YOUR_PROJECT_NUMBER]/serviceAccounts/[YOUR_SERVICE_ACCOUNT_EMAIL]'
+# Example: serviceAccount: 'projects/your-project-id/serviceAccounts/655899032716-compute@developer.gserviceaccount.com'
