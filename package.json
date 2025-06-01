@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Upload images of receipt and obtained tabulated results",
   "private": true,
-  "homepage": "https://tkongooi.github.io/receipt-scanner-dashboard",
+  "homepage": "https://tkongooi.github.io/receipt-scanner-dashboard/",
   "main": "App.js",
   "scripts": {
     "start": "react-scripts start",
