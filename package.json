@@ -1,0 +1,11 @@
+{
+  "name": "reciept_scanner",
+  "version": "1.0.0",
+  "description": "Upload images of receipt and obtained tabulated results",
+  "main": "App.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Kong Ooi Tan",
+  "license": "ISC"
+}
