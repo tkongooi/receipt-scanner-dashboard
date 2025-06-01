@@ -1,0 +1,10 @@
+{
+  "files": {
+    "main.js": "/receipt-scanner-dashboard/static/js/main.f14828bb.js",
+    "index.html": "/receipt-scanner-dashboard/index.html",
+    "main.f14828bb.js.map": "/receipt-scanner-dashboard/static/js/main.f14828bb.js.map"
+  },
+  "entrypoints": [
+    "static/js/main.f14828bb.js"
+  ]
+}
